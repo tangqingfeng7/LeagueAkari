@@ -2,13 +2,13 @@ import { Rectangle } from 'electron'
 import { makeAutoObservable, observable } from 'mobx'
 
 export class OngoingGameWindowSettings {
-  enabled: boolean = false
+  enabled: boolean = true
 
   pinned: boolean = true
 
   opacity: number = 1
 
-  showShortcut: string | null = null
+  showShortcut: string | null = 'Section'
 
   setPinned(pinned: boolean) {
     this.pinned = pinned

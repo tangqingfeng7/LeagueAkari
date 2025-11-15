@@ -234,6 +234,34 @@ const dropdownOptions = computed(() => [
     key: 'ongoing-game-default'
   },
   {
+    label: '详细数据模板',
+    key: 'detailed-stats'
+  },
+  {
+    label: '简洁胜率模板',
+    key: 'simple-winrate'
+  },
+  {
+    label: '段位信息模板',
+    key: 'rank-info'
+  },
+  {
+    label: '英雄熟练度模板',
+    key: 'champion-mastery'
+  },
+  {
+    label: '全队信息模板',
+    key: 'team-info'
+  },
+  {
+    label: '快捷报点模板',
+    key: 'betray-position'
+  },
+  {
+    label: 'ASCII艺术模板',
+    key: 'ascii-art'
+  },
+  {
     type: 'divider'
   },
   {
@@ -252,7 +280,7 @@ const handleDropdownSelect = async (key: string) => {
     return
   }
 
-  if (key === 'ongoing-game-default') {
+  if (key === 'ongoing-game-default' || key === 'detailed-stats' || key === 'simple-winrate' || key === 'rank-info' || key === 'champion-mastery' || key === 'team-info' || key === 'betray-position' || key === 'ascii-art') {
     const item = await igs.createPresetTemplate(key)
     if (item) {
       updateActiveItem(item.id)

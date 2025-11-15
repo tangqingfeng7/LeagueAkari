@@ -15,8 +15,8 @@ export class AkariOngoingGameWindow extends BaseAkariWindow<
   static readonly NAMESPACE_SUFFIX = 'ongoing-game-window'
   static readonly HTML_ENTRY = 'ongoing-game-window.html'
   static readonly TITLE = 'Akari Ongoing Game Inspector'
-  static readonly BASE_WIDTH = 1300
-  static readonly BASE_HEIGHT = 840
+  static readonly BASE_WIDTH = 1920
+  static readonly BASE_HEIGHT = 1080
 
   static readonly POLL_INTERVAL = 400
 
@@ -136,15 +136,16 @@ export class AkariOngoingGameWindow extends BaseAkariWindow<
               'stateful',
               (event) => {
                 if (event.pressed) {
+                  // 按下时显示
                   if (is.dev || GameClientMain.isGameClientForeground()) {
                     if (!this.state.show) {
                       this.show()
                     }
-
                     this._window?.setIgnoreMouseEvents(false)
                     this.state.setFakeShow(true)
                   }
                 } else {
+                  // 松开时隐藏
                   this._window?.setIgnoreMouseEvents(true)
                   this.state.setFakeShow(false)
                 }

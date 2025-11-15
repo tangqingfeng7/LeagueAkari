@@ -28,6 +28,13 @@ import {
 } from './js-template'
 import { InGameSendSettings, InGameSendState, SendableItem, TemplateDef } from './state'
 import defaultTemplate from './templates/default-template.js?asset'
+import detailedStatsTemplate from './templates/detailed-stats-template.js?asset'
+import simpleWinrateTemplate from './templates/simple-winrate-template.js?asset'
+import rankInfoTemplate from './templates/rank-info-template.js?asset'
+import championMasteryTemplate from './templates/champion-mastery-template.js?asset'
+import teamInfoTemplate from './templates/team-info-template.js?asset'
+import betrayPositionTemplate from './templates/betray-position-template.js?asset'
+import asciiArtTemplate from './templates/ascii-art-template.js?asset'
 import { TemplateEnv } from './templates/env-types'
 
 /**
@@ -599,6 +606,41 @@ export class InGameSendMain implements IAkariShardInitDispose {
         return this._createTemplate({
           name: i18next.t('in-game-send-main.templatePresets.ongoing-game'),
           code: await fs.promises.readFile(defaultTemplate, 'utf-8')
+        })
+      case 'detailed-stats':
+        return this._createTemplate({
+          name: '详细数据模板',
+          code: await fs.promises.readFile(detailedStatsTemplate, 'utf-8')
+        })
+      case 'simple-winrate':
+        return this._createTemplate({
+          name: '简洁胜率模板',
+          code: await fs.promises.readFile(simpleWinrateTemplate, 'utf-8')
+        })
+      case 'rank-info':
+        return this._createTemplate({
+          name: '段位信息模板',
+          code: await fs.promises.readFile(rankInfoTemplate, 'utf-8')
+        })
+      case 'champion-mastery':
+        return this._createTemplate({
+          name: '英雄熟练度模板',
+          code: await fs.promises.readFile(championMasteryTemplate, 'utf-8')
+        })
+      case 'team-info':
+        return this._createTemplate({
+          name: '全队信息模板',
+          code: await fs.promises.readFile(teamInfoTemplate, 'utf-8')
+        })
+      case 'betray-position':
+        return this._createTemplate({
+          name: '快捷报点模板',
+          code: await fs.promises.readFile(betrayPositionTemplate, 'utf-8')
+        })
+      case 'ascii-art':
+        return this._createTemplate({
+          name: 'ASCII艺术模板',
+          code: await fs.promises.readFile(asciiArtTemplate, 'utf-8')
         })
       default:
         return null

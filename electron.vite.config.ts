@@ -43,7 +43,22 @@ const LC_CUSTOM_TAGS = new Set([
   'keywordMajor' // 关键词护卫
 ])
 
-const mainPlugins = [swcPlugin(), yaml(), externalizeDepsPlugin()]
+const mainPlugins = [
+  swcPlugin({
+    jsc: {
+      parser: {
+        syntax: 'typescript',
+        decorators: true
+      },
+      transform: {
+        legacyDecorator: true,
+        decoratorMetadata: true
+      }
+    }
+  } as any),
+  yaml(),
+  externalizeDepsPlugin()
+]
 
 export default defineConfig({
   main: {
@@ -60,7 +75,21 @@ export default defineConfig({
     }
   },
   preload: {
-    plugins: [swcPlugin(), externalizeDepsPlugin()],
+    plugins: [
+      swcPlugin({
+        jsc: {
+          parser: {
+            syntax: 'typescript',
+            decorators: true
+          },
+          transform: {
+            legacyDecorator: true,
+            decoratorMetadata: true
+          }
+        }
+      } as any),
+      externalizeDepsPlugin()
+    ],
     build: {
       minify
     },
@@ -87,8 +116,7 @@ export default defineConfig({
       yaml(),
       vue({
         template: { compilerOptions: { isCustomElement: (tag) => LC_CUSTOM_TAGS.has(tag) } }
-      }),
-      vueDevTools()
+      })
     ],
     build: {
       minify,
