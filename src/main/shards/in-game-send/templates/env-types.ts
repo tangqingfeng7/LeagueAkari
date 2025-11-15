@@ -1,5 +1,6 @@
 import { GameDataState } from '@main/shards/league-client/lc-state/game-data'
 import { OngoingGameSettings, OngoingGameState } from '@main/shards/ongoing-game/state'
+import { AllGameData } from '@shared/types/game-client'
 
 export interface TemplateEnv {
   /**
@@ -155,4 +156,10 @@ export interface TemplateEnv {
    * 一个 map，key 为 gameId。记录了一些由于特殊原因额外加载的对局。一个例子是遇到了熟人，会自动加载和此人相关的历史对局
    */
   additionalGame: OngoingGameState['additionalGame']
+
+  /**
+   * 游戏内实时数据，包括所有玩家的实时位置坐标信息。
+   * 仅在游戏进行中（in-game）可用，否则为 null
+   */
+  liveGameData: AllGameData | null
 }

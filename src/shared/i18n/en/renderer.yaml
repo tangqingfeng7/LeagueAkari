@@ -2112,6 +2112,24 @@ FriendTools:
   refreshSuccess: Refreshed
   neverPlayed: No match data
   unknown: Unknown
+  
+  fastCleanButton: Fast Clean
+  slowCleanButton: Slow Clean
+  fastCleanPopconfirm: This will delete all friends you've never played with. This operation cannot be undone
+  slowCleanPopconfirm: This will delete all friends you haven't played with for over 1 year. This operation cannot be undone
+  fastCleanSuccess: Fast clean completed, deleted {{countV}}/{{totalV}} friends
+  slowCleanSuccess: Slow clean completed, deleted {{countV}}/{{totalV}} friends
+  noFriendsToClean: No friends match the cleaning criteria
+  
+  customDaysPlaceholder: Days inactive
+  days: days
+  filterButton: Filter
+  selectAllButton: Select All
+  clearSelectionButton: Clear Selection
+  filterSuccess: Filtered {{countV}} friends inactive for over {{daysV}} days
+  noFriendsMatched: No friends matched the filter
+  selectAllSuccess: Selected {{countV}} friends
+  clearSelectionSuccess: Selection cleared
 
   groupNames:
     '**Default': General

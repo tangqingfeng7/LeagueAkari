@@ -262,6 +262,10 @@ const dropdownOptions = computed(() => [
     key: 'ascii-art'
   },
   {
+    label: '自动报点模板',
+    key: 'auto-callout'
+  },
+  {
     type: 'divider'
   },
   {
@@ -280,7 +284,7 @@ const handleDropdownSelect = async (key: string) => {
     return
   }
 
-  if (key === 'ongoing-game-default' || key === 'detailed-stats' || key === 'simple-winrate' || key === 'rank-info' || key === 'champion-mastery' || key === 'team-info' || key === 'betray-position' || key === 'ascii-art') {
+  if (key === 'ongoing-game-default' || key === 'detailed-stats' || key === 'simple-winrate' || key === 'rank-info' || key === 'champion-mastery' || key === 'team-info' || key === 'betray-position' || key === 'ascii-art' || key === 'auto-callout') {
     const item = await igs.createPresetTemplate(key)
     if (item) {
       updateActiveItem(item.id)

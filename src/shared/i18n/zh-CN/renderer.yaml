@@ -2116,6 +2116,24 @@ FriendTools:
   refreshSuccess: 已刷新
   neverPlayed: 无对局数据
   unknown: 未知
+  
+  fastCleanButton: 快速清理
+  slowCleanButton: 慢速清理
+  fastCleanPopconfirm: 将删除所有从未一起玩过的好友，操作不可恢复
+  slowCleanPopconfirm: 将删除所有超过1年未一起玩的好友，操作不可恢复
+  fastCleanSuccess: 快速清理完成，已删除 {{countV}}/{{totalV}} 个好友
+  slowCleanSuccess: 慢速清理完成，已删除 {{countV}}/{{totalV}} 个好友
+  noFriendsToClean: 没有符合清理条件的好友
+  
+  customDaysPlaceholder: 未玩天数
+  days: 天
+  filterButton: 筛选
+  selectAllButton: 全选
+  clearSelectionButton: 清除选择
+  filterSuccess: 已筛选 {{countV}} 个超过 {{daysV}} 天未一起玩的好友
+  noFriendsMatched: 没有符合条件的好友
+  selectAllSuccess: 已选择 {{countV}} 个好友
+  clearSelectionSuccess: 已清除选择
 
   groupNames:
     '**Default': 综合

@@ -35,6 +35,7 @@ import championMasteryTemplate from './templates/champion-mastery-template.js?as
 import teamInfoTemplate from './templates/team-info-template.js?asset'
 import betrayPositionTemplate from './templates/betray-position-template.js?asset'
 import asciiArtTemplate from './templates/ascii-art-template.js?asset'
+import autoCalloutTemplate from './templates/auto-callout-template.js?asset'
 import { TemplateEnv } from './templates/env-types'
 
 /**
@@ -74,7 +75,8 @@ export class InGameSendMain implements IAkariShardInitDispose {
     private readonly _lc: LeagueClientMain,
     private readonly _shared: SharedGlobalShard,
     private readonly _app: AppCommonMain,
-    private readonly _rc: RemoteConfigMain
+    private readonly _rc: RemoteConfigMain,
+    private readonly _gameClient: GameClientMain
   ) {
     this._log = _loggerFactory.create(InGameSendMain.id)
     this._setting = _settingFactory.register(
@@ -133,7 +135,7 @@ export class InGameSendMain implements IAkariShardInitDispose {
     )
   }
 
-  private _performSendableItemSend(id: string, target: 'all' | 'ally' | 'enemy') {
+  private async _performSendableItemSend(id: string, target: 'all' | 'ally' | 'enemy') {
     if (this._currentSendController) {
       this._log.info('Existing task in progress, cancelling')
       this._currentSendController.abort()
@@ -177,7 +179,8 @@ export class InGameSendMain implements IAkariShardInitDispose {
       try {
         const ctx = this._vmContexts[s.content.templateId] as JSContextV1
         if (ctx) {
-          const lines = ctx.getMessages(this._createTemplateEnv({ target }))
+          const env = await this._createTemplateEnv({ target })
+          const lines = ctx.getMessages(env)
           this._sendTextToChatOrInGame(lines, this._currentSendController.signal)
           this._ipc.sendEvent(InGameSendMain.id, 'success-template-execution-succeeded', {
             templateId: s.content.templateId
@@ -198,7 +201,7 @@ export class InGameSendMain implements IAkariShardInitDispose {
     }
   }
 
-  private _getDryRunResult(templateId: string, target: 'ally' | 'enemy' | 'all') {
+  private async _getDryRunResult(templateId: string, target: 'ally' | 'enemy' | 'all') {
     const ctx = this._vmContexts[templateId] as JSContextV1
     if (!ctx) {
       this._log.warn('Template context not found', templateId)
@@ -209,8 +212,9 @@ export class InGameSendMain implements IAkariShardInitDispose {
     }
 
     try {
+      const env = await this._createTemplateEnv({ target })
       return {
-        messages: ctx.getMessages(this._createTemplateEnv({ target })),
+        messages: ctx.getMessages(env),
         error: null
       }
     } catch (error) {
@@ -642,6 +646,11 @@ export class InGameSendMain implements IAkariShardInitDispose {
           name: 'ASCII艺术模板',
           code: await fs.promises.readFile(asciiArtTemplate, 'utf-8')
         })
+      case 'auto-callout':
+        return this._createTemplate({
+          name: '自动报点模板',
+          code: await fs.promises.readFile(autoCalloutTemplate, 'utf-8')
+        })
       default:
         return null
     }
@@ -666,7 +675,7 @@ export class InGameSendMain implements IAkariShardInitDispose {
     return template
   }
 
-  private _createTemplateEnv(options: { target: 'ally' | 'enemy' | 'all' }): TemplateEnv {
+  private async _createTemplateEnv(options: { target: 'ally' | 'enemy' | 'all' }): Promise<TemplateEnv> {
     const selfPuuid = this._lc.data.summoner.me?.puuid
     const teams = this._og.state.teams || {}
     const teamEntries = Object.entries(teams)
@@ -687,6 +696,18 @@ export class InGameSendMain implements IAkariShardInitDispose {
 
     const targetMembers =
       options.target === 'all' ? allMembers : options.target === 'ally' ? allyMembers : enemyMembers
+
+    // 尝试获取实时游戏数据（仅在游戏进行中可用）
+    let liveGameData = null
+    if (this._og.state.queryStage.phase === 'in-game') {
+      try {
+        const response = await this._gameClient.http.get<any>('/liveclientdata/allgamedata')
+        liveGameData = response.data
+      } catch (error) {
+        // 游戏客户端API不可用时静默失败
+        this._log.debug('Failed to fetch live game data', error)
+      }
+    }
 
     return {
       ...options,
@@ -732,7 +753,8 @@ export class InGameSendMain implements IAkariShardInitDispose {
       gameTimeline: this._og.state.gameTimeline,
       inferredPremadeTeams: this._og.state.inferredPremadeTeams,
       teamParticipantGroups: this._og.state.teamParticipantGroups,
-      additionalGame: this._og.state.additionalGame
+      additionalGame: this._og.state.additionalGame,
+      liveGameData: liveGameData
     }
   }
 

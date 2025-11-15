@@ -24,6 +24,7 @@ import { SettingFactoryMain } from '../setting-factory'
 import { SetterSettingService } from '../setting-factory/setter-setting-service'
 import { SgpMain } from '../sgp'
 import { OngoingGameSettings, OngoingGameState } from './state'
+import { SimpleCache, globalPerformanceMonitor } from '@shared/utils'
 
 /**
  * 用于游戏过程中的对局分析, 包括在此期间的战绩查询, 计算等
@@ -98,6 +99,10 @@ export class OngoingGameMain implements IAkariShardInitDispose {
   private _controller: AbortController | null = null
 
   private _debouncedUpdateMatchHistoryFn = _.debounce(() => this._updateMatchHistory(), 250)
+  
+  // 分析结果缓存，避免重复计算
+  private _analysisCache = new SimpleCache<any>(30000) // 30秒缓存
+  private _teamUpCache = new SimpleCache<any>(30000) // 预组队缓存
 
   constructor(
     private readonly _loggerFactory: LoggerFactoryMain,
@@ -954,6 +959,19 @@ export class OngoingGameMain implements IAkariShardInitDispose {
       return null
     }
 
+    // 生成缓存键
+    const cacheKey = JSON.stringify({
+      teams: this.state.teams,
+      matchHistoryKeys: Object.keys(this.state.matchHistory),
+      threshold: this.settings.premadeTeamThreshold
+    })
+
+    // 尝试从缓存获取
+    const cached = this._teamUpCache.get(cacheKey)
+    if (cached) {
+      return cached
+    }
+
     const games = Object.values(this.state.matchHistory)
       .map((m) => m.data)
       .flat()
@@ -962,9 +980,11 @@ export class OngoingGameMain implements IAkariShardInitDispose {
       return null
     }
 
-    // 统计所有目前游戏中的每个队伍，并且将这些队伍分别视为一个独立的个体，使用 `${游戏ID}|${队伍ID}` 进行唯一区分
-    const teamSides = new Map<string, string[]>()
-    for (const game of games) {
+    // 使用性能监控
+    const result = globalPerformanceMonitor.measureSync('预组队计算', () => {
+      // 统计所有目前游戏中的每个队伍，并且将这些队伍分别视为一个独立的个体，使用 `${游戏ID}|${队伍ID}` 进行唯一区分
+      const teamSides = new Map<string, string[]>()
+      for (const game of games) {
       const mode = game.gameMode
 
       // participantId -> puuid
@@ -1015,33 +1035,39 @@ export class OngoingGameMain implements IAkariShardInitDispose {
       })
     }
 
-    const matches = Array.from(teamSides).map(([id /* sideId */, players]) => ({ id, players }))
+      const matches = Array.from(teamSides).map(([id /* sideId */, players]) => ({ id, players }))
 
-    // key: teamSide, values: { players: string[], times: number }[]
-    const result = Object.entries(this.state.teams).reduce(
-      (obj, [team, teamPlayers]) => {
-        obj[team] = calculateTogetherTimes(matches, teamPlayers, this.settings.premadeTeamThreshold)
+      // key: teamSide, values: { players: string[], times: number }[]
+      const teamResults = Object.entries(this.state.teams).reduce(
+        (obj, [team, teamPlayers]) => {
+          obj[team] = calculateTogetherTimes(matches, teamPlayers, this.settings.premadeTeamThreshold)
 
-        return obj
-      },
-      {} as Record<
-        string,
-        {
-          players: string[]
-          times: number
-        }[]
-      >
-    )
+          return obj
+        },
+        {} as Record<
+          string,
+          {
+            players: string[]
+            times: number
+          }[]
+        >
+      )
 
-    // teamSide -> players[][]
-    const combinedGroups: Record<string, string[][]> = {}
+      // teamSide -> players[][]
+      const combinedGroups: Record<string, string[][]> = {}
 
-    for (const [team, playerGroups] of Object.entries(result)) {
-      const groups = playerGroups.map((pg) => pg.players)
-      combinedGroups[team] = removeOverlappingSubsets(groups) as string[][]
-    }
+      for (const [team, playerGroups] of Object.entries(teamResults)) {
+        const groups = playerGroups.map((pg) => pg.players)
+        combinedGroups[team] = removeOverlappingSubsets(groups) as string[][]
+      }
 
-    return combinedGroups
+      return combinedGroups
+    })
+
+    // 缓存结果
+    this._teamUpCache.set(cacheKey, result)
+
+    return result
   }
 
   private _calcAnalysis() {
@@ -1049,48 +1075,71 @@ export class OngoingGameMain implements IAkariShardInitDispose {
       return null
     }
 
+    // 生成缓存键
+    const cacheKey = JSON.stringify({
+      teams: this.state.teams,
+      matchHistoryKeys: Object.keys(this.state.matchHistory),
+      additionalGameKeys: Object.keys(this.state.additionalGame)
+    })
+
+    // 尝试从缓存获取
+    const cached = this._analysisCache.get(cacheKey)
+    if (cached) {
+      return cached
+    }
+
     try {
-      const playerAnalyses: Record<string, MatchHistoryGamesAnalysisAll> = {}
+      // 使用性能监控
+      return globalPerformanceMonitor.measureSync('战绩分析计算', () => {
+        const playerAnalyses: Record<string, MatchHistoryGamesAnalysisAll> = {}
 
-      for (const [puuid, matchHistory] of Object.entries(this.state.matchHistory)) {
-        if (!matchHistory) {
-          continue
-        }
-
-        const mappedGameTimeline = Object.entries(this.state.additionalGame).reduce(
+        // 预先映射游戏时间线数据，避免重复计算
+        const mappedGameTimeline = Object.entries(this.state.gameTimeline).reduce(
           (obj, [gameIdStr, data]) => {
-            obj[gameIdStr] = data.data
+            obj[Number(gameIdStr)] = data.data
             return obj
           },
           {} as Record<number, GameTimeline>
         )
 
-        // console.log('mappedGameTimeline', mappedGameTimeline)
+        // 并行处理玩家分析
+        for (const [puuid, matchHistory] of Object.entries(this.state.matchHistory)) {
+          if (!matchHistory) {
+            continue
+          }
 
-        const analysis = analyzeMatchHistory(
-          matchHistory.data.map((g) => ({ game: g, isDetailed: true })),
-          puuid,
-          undefined,
-          mappedGameTimeline
-        )
-        if (analysis) {
-          playerAnalyses[puuid] = analysis
+          const analysis = analyzeMatchHistory(
+            matchHistory.data.map((g) => ({ game: g, isDetailed: true })),
+            puuid,
+            undefined,
+            mappedGameTimeline
+          )
+          if (analysis) {
+            playerAnalyses[puuid] = analysis
+          }
         }
-      }
 
-      const teamAnalyses: Record<string, MatchHistoryGamesAnalysisTeamSide> = {}
+        const teamAnalyses: Record<string, MatchHistoryGamesAnalysisTeamSide> = {}
 
-      for (const [sideId, puuids] of Object.entries(this.state.teams)) {
-        const teamPlayerAnalyses = puuids.map((p) => playerAnalyses[p]).filter(Boolean)
-        const teamAnalysis = analyzeTeamMatchHistory(teamPlayerAnalyses)
-        if (teamAnalysis) {
-          teamAnalyses[sideId] = teamAnalysis
+        // 计算队伍分析
+        for (const [sideId, puuids] of Object.entries(this.state.teams)) {
+          const teamPlayerAnalyses = puuids.map((p) => playerAnalyses[p]).filter(Boolean)
+          const teamAnalysis = analyzeTeamMatchHistory(teamPlayerAnalyses)
+          if (teamAnalysis) {
+            teamAnalyses[sideId] = teamAnalysis
+          }
         }
-      }
-      return {
-        players: playerAnalyses,
-        teams: teamAnalyses
-      }
+
+        const result = {
+          players: playerAnalyses,
+          teams: teamAnalyses
+        }
+
+        // 缓存结果
+        this._analysisCache.set(cacheKey, result)
+
+        return result
+      })
     } catch (error) {
       this._log.warn('Error calculating match history', error)
       return null

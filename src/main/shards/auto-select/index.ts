@@ -528,27 +528,29 @@ export class AutoSelectMain implements IAkariShardInitDispose {
           return
         }
 
-        // TODO: REFACTOR THIS
-        // 临时应对新版 ARAM 的策略
-        // BAN_PICK 阶段可以先直接选上
+        // ARAM BAN_PICK 阶段自动选择策略
+        // 在 BAN_PICK 阶段，如果有 firstPickActionId 可以直接选择英雄
         if (session.timerPhase === 'BAN_PICK' && session.firstPickActionId !== undefined) {
-          const selfChampionId = session.myTeam.find(
-            (v) => v.cellId === session.localPlayerCellId
-          )?.championId
-
-          // 0 = 未选
-          if (selfChampionId === 0) {
+          const selfPlayer = session.myTeam.find((v) => v.cellId === session.localPlayerCellId)
+          
+          // 仅在未选择英雄时（championId === 0）执行
+          if (selfPlayer && selfPlayer.championId === 0) {
+            // 获取可选英雄列表（在子集中且未被禁用）
             const availableChampions = session.subsetChampionList.filter(
-              (c) =>
-                this._lc.data.champSelect.currentPickableChampionIds.has(c) &&
-                !this._lc.data.champSelect.disabledChampionIds.has(c)
+              (championId) =>
+                this._lc.data.champSelect.currentPickableChampionIds.has(championId) &&
+                !this._lc.data.champSelect.disabledChampionIds.has(championId)
             )
 
-            const pickableOnSubset = expected.filter((c) => availableChampions.includes(c))
+            // 从期望的英雄列表中筛选可选的
+            const pickableChampions = expected.filter((championId) => 
+              availableChampions.includes(championId)
+            )
 
-            if (pickableOnSubset.length > 0) {
+            // 如果有可选的英雄，选择优先级最高的（列表第一个）
+            if (pickableChampions.length > 0) {
               this._lc.api.champSelect.pickOrBan(
-                pickableOnSubset[0],
+                pickableChampions[0],
                 true,
                 'pick',
                 session.firstPickActionId

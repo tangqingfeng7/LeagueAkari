@@ -6,6 +6,44 @@
           <template #header>
             <span class="card-header-title">{{ t('FriendTools.title') }}</span>
           </template>
+          <div class="filter-group">
+            <NInputNumber
+              v-model:value="customDays"
+              :min="1"
+              :max="3650"
+              :placeholder="t('FriendTools.customDaysPlaceholder')"
+              size="small"
+              style="width: 150px"
+              :disabled="isLoading || !lcs.isConnected"
+            >
+              <template #suffix>{{ t('FriendTools.days') }}</template>
+            </NInputNumber>
+            <NButton
+              :disabled="isLoading || !lcs.isConnected || !customDays"
+              size="small"
+              type="primary"
+              secondary
+              @click="filterByCustomDays"
+            >
+              {{ t('FriendTools.filterButton') }}
+            </NButton>
+            <NButton
+              :disabled="isLoading || !lcs.isConnected"
+              size="small"
+              secondary
+              @click="selectAllFriends"
+            >
+              {{ t('FriendTools.selectAllButton') }}
+            </NButton>
+            <NButton
+              :disabled="isLoading || !lcs.isConnected || selectedItems.length === 0"
+              size="small"
+              secondary
+              @click="clearSelection"
+            >
+              {{ t('FriendTools.clearSelectionButton') }}
+            </NButton>
+          </div>
           <div class="button-group">
             <NPopconfirm
               @positive-click="deleteSelectedFriends"
@@ -35,6 +73,54 @@
                 </NButton>
               </template>
               {{ t('FriendTools.deletePopconfirm') }}
+            </NPopconfirm>
+            <NPopconfirm
+              @positive-click="autoCleanFast"
+              :disabled="isLoading || !lcs.isConnected"
+              :positive-text="t('common.confirm')"
+              :positive-button-props="{
+                size: 'tiny',
+                type: 'warning'
+              }"
+              :negative-button-props="{
+                size: 'tiny'
+              }"
+            >
+              <template #trigger>
+                <NButton
+                  :disabled="isLoading || !lcs.isConnected"
+                  size="small"
+                  type="warning"
+                  secondary
+                >
+                  {{ t('FriendTools.fastCleanButton') }}
+                </NButton>
+              </template>
+              {{ t('FriendTools.fastCleanPopconfirm') }}
+            </NPopconfirm>
+            <NPopconfirm
+              @positive-click="autoCleanSlow"
+              :disabled="isLoading || !lcs.isConnected"
+              :positive-text="t('common.confirm')"
+              :positive-button-props="{
+                size: 'tiny',
+                type: 'warning'
+              }"
+              :negative-button-props="{
+                size: 'tiny'
+              }"
+            >
+              <template #trigger>
+                <NButton
+                  :disabled="isLoading || !lcs.isConnected"
+                  size="small"
+                  type="warning"
+                  secondary
+                >
+                  {{ t('FriendTools.slowCleanButton') }}
+                </NButton>
+              </template>
+              {{ t('FriendTools.slowCleanPopconfirm') }}
             </NPopconfirm>
             <NButton
               size="small"
@@ -94,6 +180,7 @@ import {
   NCard,
   NDataTable,
   NEllipsis,
+  NInputNumber,
   NPopconfirm,
   NScrollbar,
   useMessage
@@ -122,6 +209,7 @@ const expandedRowKeys = ref<number[]>([])
 
 const isLoading = ref(false)
 const isDeleting = ref(false)
+const customDays = ref<number | null>(null)
 
 // puuid -> info
 const extraInfoMap = ref<
@@ -393,6 +481,163 @@ const deleteSelectedFriends = async () => {
   }
 }
 
+// 快速清理：删除从未一起玩过的好友
+const autoCleanFast = async () => {
+  if (isLoading.value) {
+    return
+  }
+
+  try {
+    isLoading.value = true
+    isDeleting.value = true
+
+    const friendsToDelete: string[] = []
+
+    // 筛选出没有最后对局日期的好友（从未一起玩过）
+    for (const friend of friends.value) {
+      const extraInfo = extraInfoMap.value[friend.puuid]
+      if (!extraInfo || !extraInfo.lastGameDate) {
+        friendsToDelete.push(friend.id)
+      }
+    }
+
+    if (friendsToDelete.length === 0) {
+      message.info(() => t('FriendTools.noFriendsToClean'))
+      return
+    }
+
+    let deletedCount = 0
+    for (const friendId of friendsToDelete) {
+      if (!isDeleting.value) {
+        break
+      }
+
+      try {
+        await lc.api.chat.deleteFriend(friendId)
+        deletedCount++
+        // 添加延迟避免请求过快
+        await new Promise((resolve) => setTimeout(resolve, 100))
+      } catch (error) {
+        console.error('Failed to delete friend:', friendId, error)
+      }
+    }
+
+    message.success(() =>
+      t('FriendTools.fastCleanSuccess', {
+        countV: deletedCount,
+        totalV: friendsToDelete.length
+      })
+    )
+  } catch (error: any) {
+    message.warning(() => t('MissionClaimTool.refreshFailed', { reason: error.message }))
+  } finally {
+    isLoading.value = false
+    isDeleting.value = false
+    await updateFriends()
+  }
+}
+
+// 慢速清理：删除超过1年未一起游戏的好友
+const autoCleanSlow = async () => {
+  if (isLoading.value) {
+    return
+  }
+
+  try {
+    isLoading.value = true
+    isDeleting.value = true
+
+    const friendsToDelete: string[] = []
+    const oneYearAgo = Date.now() - 365 * 24 * 60 * 60 * 1000 // 1年前的时间戳
+
+    // 筛选出超过1年未一起玩的好友或从未一起玩过的好友
+    for (const friend of friends.value) {
+      const extraInfo = extraInfoMap.value[friend.puuid]
+      if (!extraInfo || !extraInfo.lastGameDate || extraInfo.lastGameDate < oneYearAgo) {
+        friendsToDelete.push(friend.id)
+      }
+    }
+
+    if (friendsToDelete.length === 0) {
+      message.info(() => t('FriendTools.noFriendsToClean'))
+      return
+    }
+
+    let deletedCount = 0
+    for (const friendId of friendsToDelete) {
+      if (!isDeleting.value) {
+        break
+      }
+
+      try {
+        await lc.api.chat.deleteFriend(friendId)
+        deletedCount++
+        // 添加延迟避免请求过快
+        await new Promise((resolve) => setTimeout(resolve, 500))
+      } catch (error) {
+        console.error('Failed to delete friend:', friendId, error)
+      }
+    }
+
+    message.success(() =>
+      t('FriendTools.slowCleanSuccess', {
+        countV: deletedCount,
+        totalV: friendsToDelete.length
+      })
+    )
+  } catch (error: any) {
+    message.warning(() => t('MissionClaimTool.refreshFailed', { reason: error.message }))
+  } finally {
+    isLoading.value = false
+    isDeleting.value = false
+    await updateFriends()
+  }
+}
+
+// 根据自定义天数筛选好友
+const filterByCustomDays = () => {
+  if (!customDays.value) {
+    return
+  }
+
+  const friendsToSelect: string[] = []
+  const daysAgo = Date.now() - customDays.value * 24 * 60 * 60 * 1000
+
+  // 筛选出超过指定天数未一起玩的好友或从未一起玩过的好友
+  for (const friend of friends.value) {
+    const extraInfo = extraInfoMap.value[friend.puuid]
+    if (!extraInfo || !extraInfo.lastGameDate || extraInfo.lastGameDate < daysAgo) {
+      friendsToSelect.push(friend.id)
+    }
+  }
+
+  selectedItems.value = friendsToSelect
+
+  if (friendsToSelect.length === 0) {
+    message.info(() => t('FriendTools.noFriendsMatched'))
+  } else {
+    message.success(() =>
+      t('FriendTools.filterSuccess', {
+        countV: friendsToSelect.length,
+        daysV: customDays.value
+      })
+    )
+  }
+}
+
+// 选择所有好友
+const selectAllFriends = () => {
+  const allFriendIds = friends.value.map((friend) => friend.id)
+  selectedItems.value = allFriendIds
+  message.success(() => t('FriendTools.selectAllSuccess', { countV: allFriendIds.length }))
+}
+
+// 清除选择
+const clearSelection = () => {
+  selectedItems.value = []
+  message.info(() => t('FriendTools.clearSelectionSuccess'))
+}
+
 lc.onLcuEventVue<Friend>('/lol-chat/v1/friends/:id', ({ eventType, data }, { id }) => {
   if (eventType === 'Delete') {
     friends.value = friends.value.filter((friend) => friend.id !== id)
@@ -420,6 +665,13 @@ watch(
 
 <style lang="less" scoped>
 @import '../toolkit-styles.less';
+
+.filter-group {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+  align-items: center;
+}
 
 .button-group {
   display: flex;
