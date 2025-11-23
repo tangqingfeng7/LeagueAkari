@@ -6,11 +6,15 @@ import { Equal, FindOptionsOrder, FindOptionsWhere, IsNull, Not } from 'typeorm'
 import { AkariIpcError, AkariIpcMain } from '../ipc'
 import { StorageMain } from '../storage'
 import { EncounteredGame } from '../storage/entities/EncounteredGame'
+import { GameAnalysis } from '../storage/entities/GameAnalysis'
 import { SavedPlayer } from '../storage/entities/SavedPlayers'
 import { WindowManagerMain } from '../window-manager'
 import {
   EncounteredGameQueryDto,
   EncounteredGameSaveDto,
+  GameAnalysisQueryByGameIdDto,
+  GameAnalysisQueryDto,
+  GameAnalysisSaveDto,
   OrderByDto,
   PaginationDto,
   QueryAllSavedPlayersDto,
@@ -93,6 +97,111 @@ export class SavedPlayerMain implements IAkariShardInitDispose {
     g.queueType = dto.queueType || ''
     g.updateAt = new Date()
     return this._storage.dataSource.manager.save(g)
+  }
+
+  /**
+   * 保存游戏分析数据
+   */
+  async saveGameAnalysis(dto: GameAnalysisSaveDto) {
+    // 检查是否已存在相同的游戏分析记录
+    const existing = await this._storage.dataSource.manager.findOne(GameAnalysis, {
+      where: {
+        gameId: Equal(dto.gameId),
+        selfPuuid: Equal(dto.selfPuuid)
+      }
+    })
+
+    // 如果已存在，则更新；否则创建新记录
+    const analysis = existing || new GameAnalysis()
+    analysis.gameId = dto.gameId
+    analysis.selfPuuid = dto.selfPuuid
+    analysis.region = dto.region
+    analysis.rsoPlatformId = dto.rsoPlatformId
+    analysis.queueType = dto.queueType
+    analysis.gameMode = dto.gameMode || null
+    analysis.gameDuration = dto.gameDuration || null
+    analysis.win = dto.win !== undefined ? dto.win : null
+    analysis.playerAnalyses = JSON.stringify(dto.playerAnalyses)
+    analysis.teamAnalyses = JSON.stringify(dto.teamAnalyses)
+    analysis.teamUpInfo = dto.teamUpInfo ? JSON.stringify(dto.teamUpInfo) : null
+    analysis.createdAt = new Date()
+
+    return this._storage.dataSource.manager.save(analysis)
+  }
+
+  /**
+   * 根据游戏 ID 查询游戏分析
+   */
+  async queryGameAnalysisByGameId(dto: GameAnalysisQueryByGameIdDto) {
+    const analysis = await this._storage.dataSource.manager.findOne(GameAnalysis, {
+      where: {
+        gameId: Equal(dto.gameId),
+        selfPuuid: Equal(dto.selfPuuid)
+      }
+    })
+
+    if (!analysis) {
+      return null
+    }
+
+    return {
+      ...analysis,
+      playerAnalyses: JSON.parse(analysis.playerAnalyses),
+      teamAnalyses: JSON.parse(analysis.teamAnalyses),
+      teamUpInfo: analysis.teamUpInfo ? JSON.parse(analysis.teamUpInfo) : null
+    }
+  }
+
+  /**
+   * 查询游戏分析列表
+   */
+  async queryGameAnalyses(dto: GameAnalysisQueryDto) {
+    const pageSize = dto.pageSize || 20
+    const page = dto.page || 1
+    const take = pageSize
+    const skip = (page - 1) * pageSize
+
+    const where: FindOptionsWhere<GameAnalysis> = {
+      selfPuuid: Equal(dto.selfPuuid)
+    }
+
+    if (dto.gameId) {
+      where.gameId = Equal(dto.gameId)
+    }
+
+    if (dto.queueType) {
+      where.queueType = Equal(dto.queueType)
+    }
+
+    const analyses = await this._storage.dataSource.manager.find(GameAnalysis, {
+      where,
+      order: { createdAt: 'DESC' },
+      take,
+      skip
+    })
+
+    const total = await this._storage.dataSource.manager.count(GameAnalysis, {
+      where
+    })
+
+    return {
+      data: analyses.map((a) => ({
+        ...a,
+        playerAnalyses: JSON.parse(a.playerAnalyses),
+        teamAnalyses: JSON.parse(a.teamAnalyses),
+        teamUpInfo: a.teamUpInfo ? JSON.parse(a.teamUpInfo) : null
+      })),
+      page,
+      pageSize,
+      total
+    }
+  }
+
+  /**
+   * 删除游戏分析记录
+   */
+  async deleteGameAnalysis(id: number) {
+    return this._storage.dataSource.manager.delete(GameAnalysis, { id })
   }
 
   async queryAllSavedPlayers(query: QueryAllSavedPlayersDto) {
@@ -474,6 +583,31 @@ export class SavedPlayerMain implements IAkariShardInitDispose {
 
       const filePath = result.filePaths[0]
       return await this._readTaggedPlayersFromJsonFile(filePath)
+    })
+
+    // 游戏分析相关的 IPC 处理
+    this._ipc.onCall(
+      SavedPlayerMain.id,
+      'saveGameAnalysis',
+      (_, dto: GameAnalysisSaveDto) => {
+        return this.saveGameAnalysis(dto)
+      }
+    )
+
+    this._ipc.onCall(
+      SavedPlayerMain.id,
+      'queryGameAnalysisByGameId',
+      (_, dto: GameAnalysisQueryByGameIdDto) => {
+        return this.queryGameAnalysisByGameId(dto)
+      }
+    )
+
+    this._ipc.onCall(SavedPlayerMain.id, 'queryGameAnalyses', (_, dto: GameAnalysisQueryDto) => {
+      return this.queryGameAnalyses(dto)
+    })
+
+    this._ipc.onCall(SavedPlayerMain.id, 'deleteGameAnalysis', (_, id: number) => {
+      return this.deleteGameAnalysis(id)
     })
   }
 }

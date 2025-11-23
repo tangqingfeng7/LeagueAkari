@@ -5,7 +5,9 @@ import { UxCommandLine } from '../league-client/store'
 
 export const useLeagueClientUxStore = defineStore('shard:league-client-ux-renderer', () => {
   const settings = shallowReactive({
-    useWmic: false
+    useWmic: false,
+    disableChallengeBanner: false,
+    disableHomePageAds: false
   })
 
   const launchedClients = shallowRef<UxCommandLine[]>([])

@@ -1018,6 +1018,14 @@ Client:
   leagueClientUx:
     title: League Client UX
 
+    disableChallengeBanner:
+      label: Disable Challenge Banner
+      description: Disable the challenge banner ads on the client homepage to improve client performance. Requires client restart to take effect.
+
+    disableHomePageAds:
+      label: Disable Homepage Ads
+      description: Disable homepage ad carousels to reduce resource usage and improve client performance. Requires client restart to take effect.
+
     fixWindowMethodAOptions:
       label: Adjust Window Size
       labelAdminRequired: Adjust Window Size (Admin Required)

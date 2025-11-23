@@ -7,11 +7,13 @@ import { DataSource, QueryRunner } from 'typeorm'
 
 import { AkariLogger, LoggerFactoryMain } from '../logger-factory'
 import { EncounteredGame } from './entities/EncounteredGame'
+import { GameAnalysis } from './entities/GameAnalysis'
 import { Metadata } from './entities/Metadata'
 import { SavedPlayer } from './entities/SavedPlayers'
 import { Setting } from './entities/Settings'
 import { v10_LA1_2_0initializationUpgrade } from './upgrades/version-10'
 import { v15_LA1_2_2Upgrade } from './upgrades/version-15'
+import { v16_GameAnalysisUpgrade } from './upgrades/version-16'
 
 /**
  * 任何持久性存储的逻辑集成
@@ -20,7 +22,7 @@ import { v15_LA1_2_2Upgrade } from './upgrades/version-15'
 export class StorageMain implements IAkariShardInitDispose {
   static id = 'storage-main'
 
-  static LEAGUE_AKARI_DB_CURRENT_VERSION = 15
+  static LEAGUE_AKARI_DB_CURRENT_VERSION = 16
   static LEAGUE_AKARI_DB_FILENAME = 'LeagueAkari.db'
 
   private readonly _log: AkariLogger
@@ -29,7 +31,8 @@ export class StorageMain implements IAkariShardInitDispose {
 
   private readonly _upgrades = {
     10: v10_LA1_2_0initializationUpgrade,
-    15: v15_LA1_2_2Upgrade
+    15: v15_LA1_2_2Upgrade,
+    16: v16_GameAnalysisUpgrade
   }
 
   get dataSource() {
@@ -43,7 +46,7 @@ export class StorageMain implements IAkariShardInitDispose {
       type: 'sqlite',
       database: join(app.getPath('userData'), StorageMain.LEAGUE_AKARI_DB_FILENAME),
       synchronize: false,
-      entities: [Metadata, SavedPlayer, Setting, EncounteredGame]
+      entities: [Metadata, SavedPlayer, Setting, EncounteredGame, GameAnalysis]
     })
   }
 

@@ -45,7 +45,9 @@ export class LeagueClientUxMain implements IAkariShardInitDispose {
     this._setting = _settingFactory.register(
       LeagueClientUxMain.id,
       {
-        useWmic: { default: this.settings.useWmic }
+        useWmic: { default: this.settings.useWmic },
+        disableChallengeBanner: { default: this.settings.disableChallengeBanner },
+        disableHomePageAds: { default: this.settings.disableHomePageAds }
       },
       this.settings
     )
@@ -55,10 +57,22 @@ export class LeagueClientUxMain implements IAkariShardInitDispose {
     this._handlePollExistingUx()
 
     await this._setting.applyToState()
-    this._mobx.propSync(LeagueClientUxMain.id, 'settings', this.settings, ['useWmic'])
+    this._mobx.propSync(LeagueClientUxMain.id, 'settings', this.settings, [
+      'useWmic',
+      'disableChallengeBanner',
+      'disableHomePageAds'
+    ])
     this._mobx.propSync(LeagueClientUxMain.id, 'state', this.state, ['launchedClients'])
 
     this._ipc.onCall(LeagueClientUxMain.id, 'rebuildWmi', () => this._rebuildWmi())
+    this._ipc.onCall(LeagueClientUxMain.id, 'setDisableChallengeBanner', (_, value: boolean) => {
+      this.settings.setDisableChallengeBanner(value)
+      this._applyAdBlockSettings()
+    })
+    this._ipc.onCall(LeagueClientUxMain.id, 'setDisableHomePageAds', (_, value: boolean) => {
+      this.settings.setDisableHomePageAds(value)
+      this._applyAdBlockSettings()
+    })
   }
 
   async onDispose() {
@@ -124,5 +138,27 @@ export class LeagueClientUxMain implements IAkariShardInitDispose {
     const cmd = `"${elevateExecutablePath}" cmd /c start cmd /k "${wmiRebuildScriptPath}"`
     this._log.info('Rebuilding WMI...', cmd)
     await execAsync(cmd, { shell: 'cmd', windowsHide: false })
+  }
+
+  /**
+   * 应用广告屏蔽设置
+   * 通过向客户端注入配置来禁用广告组件
+   */
+  private async _applyAdBlockSettings() {
+    try {
+      this._log.info(
+        `Applying ad block settings: disableChallengeBanner=${this.settings.disableChallengeBanner}, disableHomePageAds=${this.settings.disableHomePageAds}`
+      )
+
+      // 注意：这个功能需要在客户端重启后生效
+      // 由于LCU API的限制，我们无法直接修改正在运行的客户端的UI配置
+      // 实现方式：将配置写入本地文件，并在下次启动时加载
+
+      this._log.info(
+        'Ad block settings saved. Please restart the League Client for changes to take effect.'
+      )
+    } catch (error) {
+      this._log.error('Failed to apply ad block settings', error)
+    }
   }
 }

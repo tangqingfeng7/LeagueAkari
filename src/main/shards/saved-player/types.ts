@@ -55,3 +55,32 @@ export interface QueryAllSavedPlayersDto {
   page: number
   pageSize: number
 }
+
+export interface GameAnalysisSaveDto {
+  gameId: number
+  selfPuuid: string
+  region: string
+  rsoPlatformId: string
+  queueType: string
+  gameMode?: string
+  gameDuration?: number
+  win?: boolean
+  playerAnalyses: any
+  teamAnalyses: any
+  teamUpInfo?: any
+}
+
+export interface GameAnalysisQueryDto {
+  selfPuuid: string
+  gameId?: number
+  page?: number
+  pageSize?: number
+  startDate?: Date
+  endDate?: Date
+  queueType?: string
+}
+
+export interface GameAnalysisQueryByGameIdDto {
+  gameId: number
+  selfPuuid: string
+}

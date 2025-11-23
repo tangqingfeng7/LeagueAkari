@@ -21,6 +21,14 @@ export class LeagueClientUxRenderer {
     return this._setting.set(MAIN_SHARD_NAMESPACE, 'useWmic', enabled)
   }
 
+  setDisableChallengeBanner(enabled: boolean) {
+    return this._ipc.call(MAIN_SHARD_NAMESPACE, 'setDisableChallengeBanner', enabled)
+  }
+
+  setDisableHomePageAds(enabled: boolean) {
+    return this._ipc.call(MAIN_SHARD_NAMESPACE, 'setDisableHomePageAds', enabled)
+  }
+
   rebuildWmi() {
     return this._ipc.call(MAIN_SHARD_NAMESPACE, 'rebuildWmi')
   }

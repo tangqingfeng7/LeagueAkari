@@ -4,12 +4,30 @@ import { makeAutoObservable, observable } from 'mobx'
 export class LeagueClientUxSettings {
   useWmic = false
 
+  /**
+   * 禁用挑战横幅广告，提高客户端流畅性
+   */
+  disableChallengeBanner = false
+
+  /**
+   * 禁用主页广告轮播
+   */
+  disableHomePageAds = false
+
   constructor() {
     makeAutoObservable(this)
   }
 
   setUseWmic(s: boolean) {
     this.useWmic = s
+  }
+
+  setDisableChallengeBanner(s: boolean) {
+    this.disableChallengeBanner = s
+  }
+
+  setDisableHomePageAds(s: boolean) {
+    this.disableHomePageAds = s
   }
 }
 

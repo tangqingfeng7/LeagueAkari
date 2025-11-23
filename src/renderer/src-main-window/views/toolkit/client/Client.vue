@@ -73,6 +73,30 @@
           </template>
           <ControlItem
             class="control-item-margin"
+            :label="t('Client.leagueClientUx.disableChallengeBanner.label')"
+            :label-description="t('Client.leagueClientUx.disableChallengeBanner.description')"
+            :label-width="320"
+          >
+            <NSwitch
+              size="small"
+              :value="lcuxs.settings.disableChallengeBanner"
+              @update:value="(v) => lcux.setDisableChallengeBanner(v)"
+            />
+          </ControlItem>
+          <ControlItem
+            class="control-item-margin"
+            :label="t('Client.leagueClientUx.disableHomePageAds.label')"
+            :label-description="t('Client.leagueClientUx.disableHomePageAds.description')"
+            :label-width="320"
+          >
+            <NSwitch
+              size="small"
+              :value="lcuxs.settings.disableHomePageAds"
+              @update:value="(v) => lcux.setDisableHomePageAds(v)"
+            />
+          </ControlItem>
+          <ControlItem
+            class="control-item-margin"
             :disabled="!as.isAdministrator"
             :label="
               as.isAdministrator
@@ -133,6 +157,8 @@ import { GameClientRenderer } from '@renderer-shared/shards/game-client'
 import { useGameClientStore } from '@renderer-shared/shards/game-client/store'
 import { LeagueClientRenderer } from '@renderer-shared/shards/league-client'
 import { useLeagueClientStore } from '@renderer-shared/shards/league-client/store'
+import { LeagueClientUxRenderer } from '@renderer-shared/shards/league-client-ux'
+import { useLeagueClientUxStore } from '@renderer-shared/shards/league-client-ux/store'
 import { useTranslation } from 'i18next-vue'
 import { NButton, NCard, NInputNumber, NScrollbar, NSwitch, useDialog, useMessage } from 'naive-ui'
 import { reactive, ref, toRaw, useTemplateRef, watch } from 'vue'
@@ -144,9 +170,11 @@ const { t } = useTranslation()
 const as = useAppCommonStore()
 const lcs = useLeagueClientStore()
 const gcs = useGameClientStore()
+const lcuxs = useLeagueClientUxStore()
 
 const lc = useInstance(LeagueClientRenderer)
 const gc = useInstance(GameClientRenderer)
+const lcux = useInstance(LeagueClientUxRenderer)
 
 const dialog = useDialog()
 

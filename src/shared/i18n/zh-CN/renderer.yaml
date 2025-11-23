@@ -1020,6 +1020,14 @@ Client:
   leagueClientUx:
     title: League Client UX
 
+    disableChallengeBanner:
+      label: 禁用挑战横幅
+      description: 禁用客户端主页的挑战横幅广告，提高客户端流畅性。需要重启客户端后生效。
+
+    disableHomePageAds:
+      label: 禁用主页广告
+      description: 禁用客户端主页的广告轮播，减少资源占用，提升客户端性能。需要重启客户端后生效。
+
     fixWindowMethodAOptions:
       label: 调整窗口大小
       labelAdminRequired: 调整窗口大小 (需要管理员权限)

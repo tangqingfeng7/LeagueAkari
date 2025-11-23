@@ -1173,9 +1173,13 @@ export class OngoingGameMain implements IAkariShardInitDispose {
     const isInEndOfGame = computed(() => {
       return (
         this._lc.data.gameflow.phase === 'EndOfGame' ||
-        this._lc.data.gameflow.phase === 'PreEndOfGame'
+        this._lc.data.gameflow.phase === 'PreEndOfGame' ||
+        this._lc.data.gameflow.phase === 'WaitingForStats'
       )
     })
+
+    // 用于跟踪已保存的游戏，避免重复保存
+    let lastSavedGameId: number | null = null
 
     this._mobx.reaction(
       () => isInEndOfGame.get(),
@@ -1189,38 +1193,147 @@ export class OngoingGameMain implements IAkariShardInitDispose {
             return
           }
 
-          const players = Object.values(this.state.teams || {}).flat()
+          const gameId = this.state.queryStage.gameInfo.gameId
 
-          if (!players.includes(this._lc.data.summoner.me.puuid)) {
-            this._log.info('Current player not in this game, skip recording')
+          // 避免重复保存同一场游戏
+          if (gameId === lastSavedGameId) {
             return
           }
 
-          const filteredPlayers = players.filter((p) => p !== this._lc.data.summoner.me?.puuid)
+          const players = Object.values(this.state.teams || {}).flat()
 
-          for (const player of filteredPlayers) {
-            await this._saved.saveEncounteredGame({
-              gameId: this.state.queryStage.gameInfo.gameId,
-              puuid: player,
-              region: this._lc.state.auth.region,
-              rsoPlatformId: this._lc.state.auth.rsoPlatformId,
-              selfPuuid: this._lc.data.summoner.me.puuid,
-              queueType: this.state.queryStage.gameInfo.queueType
-            })
+          // 只有在有其他玩家时才保存遇到的玩家信息
+          if (players.length > 0 && players.includes(this._lc.data.summoner.me.puuid)) {
+            const filteredPlayers = players.filter((p) => p !== this._lc.data.summoner.me?.puuid)
 
-            this._log.info(`Save game info: ${this.state.queryStage.gameInfo.gameId}`)
-            await this._saved.saveSavedPlayer({
-              encountered: true,
-              puuid: player,
-              selfPuuid: this._lc.data.summoner.me.puuid,
-              region: this._lc.state.auth.region,
-              rsoPlatformId: this._lc.state.auth.rsoPlatformId
-            })
-            this._log.info(`Save player info: ${player}`)
+            for (const player of filteredPlayers) {
+              await this._saved.saveEncounteredGame({
+                gameId: this.state.queryStage.gameInfo.gameId,
+                puuid: player,
+                region: this._lc.state.auth.region,
+                rsoPlatformId: this._lc.state.auth.rsoPlatformId,
+                selfPuuid: this._lc.data.summoner.me.puuid,
+                queueType: this.state.queryStage.gameInfo.queueType
+              })
+
+              this._log.info(`Save game info: ${this.state.queryStage.gameInfo.gameId}`)
+              await this._saved.saveSavedPlayer({
+                encountered: true,
+                puuid: player,
+                selfPuuid: this._lc.data.summoner.me.puuid,
+                region: this._lc.state.auth.region,
+                rsoPlatformId: this._lc.state.auth.rsoPlatformId
+              })
+              this._log.info(`Save player info: ${player}`)
+            }
           }
+
+          // 始终尝试保存游戏分析数据（包括训练模式等单人游戏）
+          await this._saveGameAnalysis()
+
+          // 标记此游戏已保存
+          lastSavedGameId = gameId
         }
       }
     )
+  }
+
+  /**
+   * 保存游戏分析数据
+   */
+  private async _saveGameAnalysis() {
+    try {
+      if (
+        !this._lc.state.auth ||
+        !this._lc.data.summoner.me ||
+        !this.state.queryStage.gameInfo
+      ) {
+        this._log.warn('Cannot save game analysis: missing auth, summoner, or game info')
+        return
+      }
+
+      const gameInfo = this.state.queryStage.gameInfo
+      const selfPuuid = this._lc.data.summoner.me.puuid
+
+      // 获取游戏基本信息
+      const session = this._lc.data.gameflow.session
+      let gameMode: string | undefined
+      let gameDuration: number | undefined
+      let win: boolean | undefined
+
+      if (session) {
+        gameMode = session.gameData.queue?.gameMode
+      }
+
+      // 尝试从自己的战绩中获取胜负和游戏时长信息
+      const selfMatchHistory = this.state.matchHistory[selfPuuid]
+      if (selfMatchHistory && selfMatchHistory.data.length > 0) {
+        // 查找当前游戏
+        const currentGame = selfMatchHistory.data.find((g) => g.gameId === gameInfo.gameId)
+        if (currentGame) {
+          gameDuration = currentGame.gameDuration
+          // 通过 participantIdentities 找到自己的 participantId
+          const selfIdentity = currentGame.participantIdentities.find(
+            (pi) => pi.player.puuid === selfPuuid
+          )
+          if (selfIdentity) {
+            const selfParticipant = currentGame.participants.find(
+              (p) => p.participantId === selfIdentity.participantId
+            )
+            if (selfParticipant) {
+              win = selfParticipant.stats.win
+            }
+          }
+        }
+      }
+
+      // 获取分析数据，如果没有则尝试仅分析自己的战绩
+      let analysis = this.state.playerStats
+      const teamUp = this.state.inferredPremadeTeams
+
+      // 如果没有完整的分析数据，但有自己的战绩，尝试只分析自己的数据
+      if (!analysis && selfMatchHistory && selfMatchHistory.data.length > 0) {
+        this._log.info('No team analysis available, calculating self analysis only')
+        const selfAnalysis = analyzeMatchHistory(
+          selfMatchHistory.data.map((g) => ({ game: g, isDetailed: true })),
+          selfPuuid
+        )
+        if (selfAnalysis) {
+          analysis = {
+            players: { [selfPuuid]: selfAnalysis },
+            teams: {}
+          }
+        }
+      }
+
+      // 如果还是没有数据，创建空对象
+      if (!analysis) {
+        analysis = { players: {}, teams: {} }
+      }
+
+      this._log.info(
+        `Saving game analysis for game ${gameInfo.gameId}, mode: ${gameMode}, players: ${Object.keys(analysis.players).length}`
+      )
+
+      // 保存游戏分析
+      await this._saved.saveGameAnalysis({
+        gameId: gameInfo.gameId,
+        selfPuuid: selfPuuid,
+        region: this._lc.state.auth.region,
+        rsoPlatformId: this._lc.state.auth.rsoPlatformId,
+        queueType: gameInfo.queueType,
+        gameMode,
+        gameDuration,
+        win,
+        playerAnalyses: analysis.players,
+        teamAnalyses: analysis.teams,
+        teamUpInfo: teamUp
+      })
+
+      this._log.info(`Successfully saved game analysis for game ${gameInfo.gameId}`)
+    } catch (error) {
+      this._log.error(`Failed to save game analysis: ${error}`)
+    }
   }
 
   /**
