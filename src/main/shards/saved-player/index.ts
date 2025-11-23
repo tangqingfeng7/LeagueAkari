@@ -124,7 +124,11 @@ export class SavedPlayerMain implements IAkariShardInitDispose {
     analysis.playerAnalyses = JSON.stringify(dto.playerAnalyses)
     analysis.teamAnalyses = JSON.stringify(dto.teamAnalyses)
     analysis.teamUpInfo = dto.teamUpInfo ? JSON.stringify(dto.teamUpInfo) : null
-    analysis.createdAt = new Date()
+    
+    // 只在创建新记录时设置创建时间，更新时保留原始时间
+    if (!existing) {
+      analysis.createdAt = new Date()
+    }
 
     return this._storage.dataSource.manager.save(analysis)
   }
